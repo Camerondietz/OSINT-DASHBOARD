@@ -1,0 +1,1738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTINEL // OSINT Operations Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-base: #040608;
+  --bg-panel: #080c10;
+  --bg-panel2: #0b1018;
+  --bg-panel3: #0f1520;
+  --border: rgba(0,200,255,0.12);
+  --border-hot: rgba(0,200,255,0.35);
+  --accent: #00c8ff;
+  --accent2: #00ff9d;
+  --accent3: #ff4444;
+  --accent4: #ffaa00;
+  --text: #c8dde8;
+  --text-dim: #4a6a7a;
+  --text-bright: #e8f8ff;
+  --grid: rgba(0,200,255,0.04);
+  --scan: rgba(0,200,255,0.03);
+  --red-alert: #ff2222;
+  --font-mono: 'Share Tech Mono', monospace;
+  --font-ui: 'Rajdhani', sans-serif;
+  --font-display: 'Orbitron', monospace;
+}
+
+*, *::before, *::after {box-sizing: border-box;margin: 0;padding: 0;}
+
+html, body {
+  background: var(--bg-base);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none; z-index: 0;
+}
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    var(--scan) 2px,
+    var(--scan) 4px
+  );
+  pointer-events: none; z-index: 0;
+  animation: scanlines 8s linear infinite;
+}
+
+@keyframes scanlines {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 200px; }
+}
+
+#app { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── TOP BAR: TIMEZONE STRIP ── */
+#timezone-bar {
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-hot);
+  padding: 0 16px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  height: 52px;
+  gap: 0;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.tz-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-right: 1px solid var(--border);
+  min-width: 110px;
+  cursor: default;
+  transition: background 0.2s;
+}
+.tz-cell:first-child { border-left: 1px solid var(--border); }
+.tz-cell:hover { background: rgba(0,200,255,0.05); }
+
+.tz-cell.local {
+  background: rgba(0,200,255,0.08);
+  border-color: var(--accent);
+  position: relative;
+}
+.tz-cell.local::before {
+  content: 'LOCAL';
+  position: absolute;
+  top: 2px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 7px;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+
+.tz-name {
+  font-family: var(--font-display);
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 1px;
+}
+.tz-time {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text-bright);
+  letter-spacing: 1px;
+}
+.tz-cell.local .tz-time { color: var(--accent); font-size: 18px; }
+.tz-date {
+  font-size: 9px;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+}
+
+/* Map toggle bar */
+#tz-map-toggle {
+  position: absolute;
+  right: 12px; top: 50%; transform: translateY(-50%);
+  background: transparent;
+  border: 1px solid var(--border-hot);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#tz-map-toggle:hover { background: rgba(0,200,255,0.1); }
+
+#tz-map-panel {
+  background: var(--bg-panel2);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+  transition: height 0.35s ease;
+  height: 0;
+}
+#tz-map-panel.open {height: auto;}
+#tz-map-panel img {
+  width: 100%;
+  height: auto; /* keeps aspect ratio */
+  display: block;
+  opacity: 0.85;
+  filter: hue-rotate(180deg) invert(0.85) saturate(0.5);
+}
+
+/* ── SYSTEM HEADER ── */
+#sys-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sys-title {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 3px;
+}
+.sys-title span { color: var(--text-dim); font-size: 10px; }
+.sys-status {
+  display: flex; gap: 16px; align-items: center;
+}
+.status-dot {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-family: var(--font-mono);
+  color: var(--text-dim);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent2); animation: pulse 2s infinite; }
+.dot.warn { background: var(--accent4); animation-duration: 0.8s; }
+.dot.alert { background: var(--red-alert); animation-duration: 0.4s; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+#alert-ticker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--accent4);
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 400px;
+}
+#alert-ticker span { display: inline-block; animation: ticker 30s linear infinite; }
+@keyframes ticker { 0%{transform:translateX(100%)} 100%{transform:translateX(-100%)} }
+
+/* ── MAIN GRID LAYOUT ── */
+#main-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  grid-template-rows: auto;
+  gap: 1px;
+  background: var(--border);
+  padding: 1px;
+}
+
+/* ── PANEL BASE ── */
+.panel {
+  background: var(--bg-panel2);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.panel-title::before {
+  content: '';
+  display: inline-block;
+  width: 4px; height: 4px;
+  background: var(--accent);
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+}
+
+.panel-ctrl {
+  display: flex; gap: 6px;
+}
+.ctrl-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 8px;
+  padding: 3px 7px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.ctrl-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,200,255,0.08); }
+.ctrl-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,200,255,0.12); }
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-hot) transparent;
+}
+
+.panel-body.radio-body {
+    height: 300px;
+}
+
+/* corner decorations */
+.panel::after {
+  content: '';
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 24px; height: 24px;
+  border-left: 1px solid var(--accent);
+  border-top: 1px solid var(--accent);
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+/* Radio panel body */
+.panel.radio-panel {
+    height: 250px;
+}
+
+.radio-panel .radio-body {
+  display: flex;
+  flex-direction: row; /* stack iframes */
+  gap: 6px;               /* spacing between them */
+  width: 100%;
+}
+
+/* Radio iframes taller and full width */
+.radio-panel .radio-body iframe {
+  width: 100%;
+  height: 200px;          /* taller than IPAWS */
+  border: none;
+  display: block;
+}
+
+/* ── LEFT COLUMN ── */
+#col-left { display: flex; flex-direction: column; gap: 1px; }
+
+/* ── CENTER ── */
+#col-center { display: flex; flex-direction: column; gap: 1px; }
+
+/* ── RIGHT COLUMN ── */
+#col-right { display: flex; flex-direction: column; gap: 1px; }
+
+/* ── FEEDS / ALERTS ── */
+.feed-item {
+  padding: 6px 8px;
+  border-left: 2px solid var(--border);
+  margin-bottom: 4px;
+  background: rgba(0,200,255,0.02);
+  transition: border-color 0.2s;
+  cursor: default;
+}
+.feed-item:hover { border-left-color: var(--accent); background: rgba(0,200,255,0.05); }
+.feed-item.critical { border-left-color: var(--red-alert); background: rgba(255,34,34,0.04); }
+.feed-item.warning { border-left-color: var(--accent4); background: rgba(255,170,0,0.04); }
+.feed-item.info { border-left-color: var(--accent2); }
+
+.feed-title {
+  font-size: 11px;
+  color: var(--text-bright);
+  font-weight: 600;
+  line-height: 1.3;
+  font-family: var(--font-ui);
+}
+.feed-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  display: flex; gap: 8px;
+}
+.feed-src { color: var(--accent); }
+.badge {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: var(--font-display);
+  font-size: 7px;
+  letter-spacing: 1px;
+  border: 1px solid currentColor;
+}
+.badge.crit { color: var(--red-alert); border-color: var(--red-alert); }
+.badge.warn { color: var(--accent4); border-color: var(--accent4); }
+.badge.info { color: var(--accent2); border-color: var(--accent2); }
+.badge.live { color: var(--accent); border-color: var(--accent); animation: pulse 1.5s infinite; }
+
+/* ── MAP EMBED ── */
+.map-frame {
+  width: 100%; flex: 1;
+  border: none; min-height: 240px;
+  filter: saturate(0.7) brightness(0.9);
+}
+.map-frame.dark { filter: hue-rotate(180deg) invert(0.9) saturate(0.4) brightness(0.85); }
+
+/* ── Finance charts ── */
+.chart-scroll{
+  display:flex;
+  gap:20px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-bottom:10px;
+}
+
+.chart-card{
+  background:#111;
+  border-radius:8px;
+  padding:10px;
+  flex-shrink:0;
+  height:430px;
+}
+
+.chart-card iframe{
+  width:100%;
+  height:400px;
+  border:none;
+}
+
+.chart-card h3{
+  font-size:14px;
+  margin-bottom:8px;
+  color:#ccc;
+}
+
+/* optional scrollbar styling */
+.chart-scroll::-webkit-scrollbar{
+  height:8px;
+}
+
+.chart-scroll::-webkit-scrollbar-thumb{
+  background:#333;
+  border-radius:4px;
+}
+
+/* ── WEATHER ── */
+.wx-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wx-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); }
+.wx-val { font-family: var(--font-mono); font-size: 13px; color: var(--text-bright); }
+.wx-big { font-family: var(--font-display); font-size: 36px; color: var(--accent); text-align: center; padding: 8px 0; }
+.wx-desc { text-align: center; font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+
+/* ── STOCK TICKERS ── */
+.ticker-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+}
+.ticker-sym { font-size: 12px; color: var(--accent); font-weight: 700; }
+.ticker-price { font-size: 12px; color: var(--text-bright); }
+.ticker-chg { font-size: 11px; }
+.ticker-chg.up { color: var(--accent2); }
+.ticker-chg.dn { color: var(--red-alert); }
+
+/* ── SPARKLINE CANVAS ── */
+.spark { height: 40px; width: 100%; }
+
+/* ── METER BARS ── */
+.meter {
+  margin-bottom: 6px;
+}
+.meter-label { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); margin-bottom: 2px; display: flex; justify-content: space-between; }
+.meter-bar { height: 4px; background: rgba(0,200,255,0.08); border-radius: 0; position: relative; }
+.meter-fill { height: 100%; background: var(--accent); position: absolute; left: 0; top: 0; transition: width 1s ease; }
+.meter-fill.warn { background: var(--accent4); }
+.meter-fill.crit { background: var(--red-alert); }
+
+/* ── QUICK LINKS ── */
+.qlink {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 11px;
+  transition: all 0.2s;
+  background: rgba(0,200,255,0.01);
+}
+.qlink:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,200,255,0.06); }
+.qlink-icon { font-size: 14px; width: 18px; text-align: center; }
+.qlink-label { font-family: var(--font-ui); font-weight: 600; }
+.qlink-sub { font-size: 9px; color: var(--text-dim); font-family: var(--font-mono); }
+
+/* ── SECTION DIVIDER ── */
+.sec-div {
+  padding: 4px 8px;
+  font-family: var(--font-display);
+  font-size: 8px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+/* ── CYBER ALERT LIST ── */
+.cyber-item {
+  padding: 5px 8px;
+  border-left: 2px solid var(--accent3);
+  margin-bottom: 3px;
+  background: rgba(255,68,68,0.03);
+  font-size: 10px;
+}
+.cyber-title { color: var(--text-bright); font-weight: 600; }
+.cyber-meta { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); }
+
+/* ── IFRAME MODULES ── */
+.iframe-module {
+  width: 100%; border: none;
+  background: var(--bg-panel3);
+}
+
+/* ── RADIO PANEL ── */
+.radio-station {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.radio-station:hover { border-color: var(--accent); background: rgba(0,200,255,0.05); }
+.radio-station.playing { border-color: var(--accent2); background: rgba(0,255,157,0.05); }
+.radio-name { font-size: 11px; font-weight: 600; }
+.radio-freq { font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); }
+.radio-play { width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 8px solid var(--accent); }
+.radio-station.playing .radio-play { background: var(--accent2); border: none; width: 8px; height: 10px; display: block; }
+
+/* ── BOTTOM BAR ── */
+#bottom-bar {
+  height: 24px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.bb-item { display: flex; gap: 4px; }
+.bb-label { color: var(--text-dim); }
+.bb-val { color: var(--accent); }
+#uptime-counter { color: var(--accent2); }
+
+/* ── X OVERLAY ── */
+#osint-feed .feed-item {
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+#osint-feed .feed-title a:hover {
+  color: var(--accent);
+}
+
+/* ── MODAL OVERLAY ── */
+#modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85); z-index: 100;
+  align-items: center; justify-content: center;
+}
+#modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--bg-panel2);
+  border: 1px solid var(--border-hot);
+  padding: 20px;
+  max-width: 480px; width: 90%;
+  position: relative;
+}
+.modal-close {
+  position: absolute; top: 10px; right: 12px;
+  background: none; border: none; color: var(--text-dim);
+  font-size: 18px; cursor: pointer;
+}
+.modal-title { font-family: var(--font-display); font-size: 11px; color: var(--accent); letter-spacing: 2px; margin-bottom: 12px; }
+
+/* ── ADD MODULE WIDGET ── */
+#add-module {
+  position: fixed; bottom: 32px; right: 16px; z-index: 50;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 9px; letter-spacing: 2px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(0,200,255,0.2);
+}
+#add-module:hover { background: rgba(0,200,255,0.15); box-shadow: 0 0 30px rgba(0,200,255,0.4); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track {background: transparent;}
+::-webkit-scrollbar-thumb {background: var(--border-hot);}
+
+/* Loading shimmer */
+.shimmer {
+  background: linear-gradient(90deg, rgba(0,200,255,0.03) 25%, rgba(0,200,255,0.08) 50%, rgba(0,200,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  height: 12px; border-radius: 0; margin-bottom: 4px;
+}
+@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* Responsive collapse */
+@media (max-width: 1100px) {
+  #main-grid { grid-template-columns: 240px 1fr 240px; }
+}
+@media (max-width: 800px) {
+  #main-grid { grid-template-columns: 1fr; }
+}
+
+/* Glow on panel header accent */
+.panel-header { box-shadow: inset 0 -1px 0 var(--border); }
+
+/* Live indicator */
+.live-ring {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent2);
+  box-shadow: 0 0 6px var(--accent2);
+  animation: pulse 1s infinite;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── TIMEZONE BAR ── -->
+  <div id="timezone-bar">
+    <div class="tz-cell" id="tz-hst">
+      <div class="tz-name">HST · HONOLULU</div>
+      <div class="tz-time" id="t-hst">--:--:--</div>
+      <div class="tz-date" id="d-hst">---</div>
+    </div>
+    <div class="tz-cell" id="tz-akst">
+      <div class="tz-name">AKST · ANCHORAGE</div>
+      <div class="tz-time" id="t-akst">--:--:--</div>
+      <div class="tz-date" id="d-akst">---</div>
+    </div>
+    <div class="tz-cell" id="tz-pst">
+      <div class="tz-name">PST · LOS ANGELES</div>
+      <div class="tz-time" id="t-pst">--:--:--</div>
+      <div class="tz-date" id="d-pst">---</div>
+    </div>
+    <div class="tz-cell" id="tz-mst">
+      <div class="tz-name">MST · DENVER</div>
+      <div class="tz-time" id="t-mst">--:--:--</div>
+      <div class="tz-date" id="d-mst">---</div>
+    </div>
+    <div class="tz-cell local" id="tz-cst">
+      <div class="tz-name">CST · AUSTIN TX</div>
+      <div class="tz-time" id="t-cst">--:--:--</div>
+      <div class="tz-date" id="d-cst">---</div>
+    </div>
+    <div class="tz-cell" id="tz-est">
+      <div class="tz-name">EST · NEW YORK</div>
+      <div class="tz-time" id="t-est">--:--:--</div>
+      <div class="tz-date" id="d-est">---</div>
+    </div>
+    <div class="tz-cell" id="tz-gmt">
+      <div class="tz-name">UTC · LONDON</div>
+      <div class="tz-time" id="t-gmt">--:--:--</div>
+      <div class="tz-date" id="d-gmt">---</div>
+    </div>
+    <div class="tz-cell" id="tz-cet">
+      <div class="tz-name">CET · BERLIN</div>
+      <div class="tz-time" id="t-cet">--:--:--</div>
+      <div class="tz-date" id="d-cet">---</div>
+    </div>
+    <div class="tz-cell" id="tz-ist">
+      <div class="tz-name">IST · NEW DELHI</div>
+      <div class="tz-time" id="t-ist">--:--:--</div>
+      <div class="tz-date" id="d-ist">---</div>
+    </div>
+    <div class="tz-cell" id="tz-cst8">
+      <div class="tz-name">CST+8 · BEIJING</div>
+      <div class="tz-time" id="t-cst8">--:--:--</div>
+      <div class="tz-date" id="d-cst8">---</div>
+    </div>
+    <div class="tz-cell" id="tz-jst">
+      <div class="tz-name">JST · TOKYO</div>
+      <div class="tz-time" id="t-jst">--:--:--</div>
+      <div class="tz-date" id="d-jst">---</div>
+    </div>
+    <button id="tz-map-toggle" onclick="toggleTzMap()">MAP ▼</button>
+  </div>
+
+  <!-- TZ World Map -->
+<div id="tz-map-panel">
+  <img src="media/timezone.png" alt="World Time Zones" id="tz-map-frame" />
+</div>
+
+  <!-- ── SYSTEM HEADER ── -->
+  <div id="sys-header">
+    <div class="sys-title">SENTINEL <span>// OSINT OPS DASHBOARD v2.0</span></div>
+    <div id="alert-ticker">
+      <span id="ticker-text">◈ LOADING LIVE FEEDS... ◈ NWS WEATHER ALERTS ACTIVE ◈ USGS SEISMIC MONITORING ONLINE ◈ IPAWS FEED CONNECTED ◈ INITIALIZING MODULES...</span>
+    </div>
+    <div class="sys-status">
+      <div class="status-dot"><div class="dot"></div> SYS LIVE</div>
+      <div class="status-dot"><div class="dot warn" id="alert-dot"></div> <span id="alert-count">0</span> ALERTS</div>
+      <div class="status-dot"><span class="live-ring"></span> <span id="uptime-counter">00:00:00</span></div>
+    </div>
+  </div>
+  <!-- IPAWS Feed -->
+  <iframe 
+      src="https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/feed"
+      style="
+        width:100%;
+        height:40px;      /* shorter */
+        border:none;
+        background:#f46e6e;
+        color:#000;
+        display:block;
+        margin-bottom:6px;
+      ">
+  </iframe>
+  <!-- ── MAIN GRID ── -->
+  <div id="main-grid">
+
+    <!-- LEFT COLUMN -->
+    <div id="col-left">
+
+      <!-- IPAWS / Emergency Alerts -->
+      <div class="panel" style="min-height:200px">
+        <div class="panel-header">
+          <div class="panel-title">IPAWS · EAS ALERTS</div>
+          <div class="panel-ctrl">
+            <span class="badge live">LIVE</span>
+            <button class="ctrl-btn" onclick="loadIPAWS()">REFRESH</button>
+          </div>
+        </div>
+        <div class="panel-body" id="ipaws-feed">
+          <div class="shimmer"></div><div class="shimmer" style="width:80%"></div><div class="shimmer" style="width:60%"></div>
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);margin-top:8px;padding:4px;border:1px dashed var(--border)">
+            ℹ IPAWS covers all official U.S. government emergency alerts: Amber Alerts, Presidential Alerts, Wireless Emergency Alerts (WEA), EAS broadcasts. Active alerts expire after 30 min. Geo-filtered by event type.<br><br>
+            The public feed at apps.fema.gov has SSL/CORS restrictions for direct browser fetch. Configure a CORS proxy or use the OpenFEMA API at:<br>
+            <span style="color:var(--accent)">api.fema.gov/v1/ipawsArchivedAlerts</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- NWS Weather Alerts -->
+      <div class="panel" style="min-height:180px">
+        <div class="panel-header">
+          <div class="panel-title">NWS WEATHER ALERTS · TX</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn active" id="wx-local-btn" onclick="setWxScope('local',this)">LOCAL</button>
+            <button class="ctrl-btn" id="wx-nat-btn" onclick="setWxScope('national',this)">NAT'L</button>
+          </div>
+        </div>
+        <div class="panel-body" id="nws-alerts">
+          <div class="shimmer"></div><div class="shimmer" style="width:75%"></div>
+        </div>
+      </div>
+
+      <!-- NTAS Status -->
+       <div style="justify-content:center">
+        <iframe src="https://www.dhs.gov/ntas/" name="National Terrorism Advisory System" title="National Terrorism Advisory System" width="250" height="180" scrolling="no" frameborder="0" seamless border="0"></iframe>
+      </div>
+      <!-- USGS Earthquakes -->
+      <div class="panel" style="min-height:180px">
+        <div class="panel-header">
+          <div class="panel-title">USGS SEISMIC FEED</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn active" id="eq-day-btn" onclick="setEqTime('day',this)">24H</button>
+            <button class="ctrl-btn" id="eq-week-btn" onclick="setEqTime('week',this)">7D</button>
+          </div>
+        </div>
+        <div class="panel-body" id="usgs-feed">
+          <div class="shimmer"></div><div class="shimmer" style="width:85%"></div><div class="shimmer" style="width:70%"></div>
+        </div>
+      </div>
+
+      <!-- Cyber Alerts -->
+      <div class="panel" style="min-height:160px">
+        <div class="panel-header">
+          <div class="panel-title">CISA CYBERSECURITY ALERTS</div>
+          <div class="panel-ctrl">
+            <a href="https://www.cisa.gov/news-events/cybersecurity-advisories" target="_blank" class="ctrl-btn">→ CISA</a>
+          </div>
+        </div>
+        <div class="panel-body" id="cyber-feed">
+          <div class="cyber-item">
+            <div class="cyber-title">CISA KEV: Critical ICS Vulnerability</div>
+            <div class="cyber-meta">Source: CISA CVE · <a href="https://www.cisa.gov/known-exploited-vulnerabilities-catalog" target="_blank" style="color:var(--accent)">cisa.gov/kev</a></div>
+          </div>
+          <div class="cyber-item">
+            <div class="cyber-title">Cybersecurity Advisories</div>
+            <div class="cyber-meta">Source: CISA AA · <a href="https://www.cisa.gov/news-events/cybersecurity-advisories" target="_blank" style="color:var(--accent)">advisories</a></div>
+          </div>
+          <div class="sec-div">LIVE FEEDS</div>
+          <a href="https://feeds.feedburner.com/TheHackersNews" target="_blank" class="qlink">
+            <span class="qlink-icon">🔴</span>
+            <span><div class="qlink-label">The Hacker News RSS</div><div class="qlink-sub">feedburner.com · live</div></span>
+          </a>
+          <a href="https://www.bleepingcomputer.com/feed/" target="_blank" class="qlink">
+            <span class="qlink-icon">🔵</span>
+            <span><div class="qlink-label">BleepingComputer Feed</div><div class="qlink-sub">bleepingcomputer.com</div></span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Live Radio -->
+      <div class="panel" style="min-height:160px">
+        <div class="panel-header">
+          <div class="panel-title">LIVE RADIO TRAFFIC</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn" onclick="stopRadio()">■ STOP</button>
+          </div>
+        </div>
+        <div class="panel-body" id="radio-panel">
+          <div id="radio-stations"></div>
+          <audio id="radio-player" style="display:none"></audio>
+          <div class="sec-div">SCANNER LINKS</div>
+          <a href="https://www.broadcastify.com/webPlayer/14439" target="_blank" class="qlink">
+            <span class="qlink-icon">📻</span>
+            <span><div class="qlink-label">Austin Police Scanner</div><div class="qlink-sub">broadcastify.com</div></span>
+          </a>
+          <a href="https://www.broadcastify.com/calls/playlists/?uuid=ecbfd29b-59dd-11f0-9e04-0e98d5b32039" target="_blank" class="qlink">
+            <span class="qlink-icon">🚁</span>
+            <span><div class="qlink-label">Austin Fire</div><div class="qlink-sub">broadcastify.com</div></span>
+          </a>
+          <a href="https://www.liveatc.net/search/?icao=KAUS" target="_blank" class="qlink">
+            <span class="qlink-icon">✈</span>
+            <span><div class="qlink-label">KAUS ATC Live</div><div class="qlink-sub">liveatc.net · Austin Airport</div></span>
+          </a>
+        </div>
+      </div>
+
+    </div><!-- /col-left -->
+
+    <!-- CENTER COLUMN -->
+    <div id="col-center">
+
+      <!-- FLIGHT + SHIP MAPS -->
+      <div class="panel" style="flex:0 0 auto">
+        <div class="panel-header">
+          <div class="panel-title">AIR &amp; MARITIME TRAFFIC</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn active" id="map-air-btn" onclick="setTrafficMap('air',this)">AIR</button>
+            <button class="ctrl-btn" id="map-ship-btn" onclick="setTrafficMap('ship',this)">SHIP</button>
+            <button class="ctrl-btn" id="map-traffic-btn" onclick="setTrafficMap('traffic',this)">ROAD</button>
+            <!-- <button class="ctrl-btn" id="map-sat-btn" onclick="setTrafficMap('sat',this)">SAT</button> -->
+          </div>
+        </div>
+        <div style="height:500px; position:relative;">
+          <iframe id="traffic-map" class="map-frame" style="height:500px"
+            src="https://globe.adsbexchange.com/"
+            title="Flight Traffic"></iframe>
+          <div style="position:absolute;bottom:6px;left:8px;background:rgba(4,6,8,0.8);padding:3px 8px;font-family:var(--font-mono);font-size:9px;color:var(--accent)">
+            AUSTIN TX REGION · LIVE
+          </div>
+        </div>
+      </div>
+
+      <!-- DOWN DETECTOR + ERCOT -->
+      <div class="panel" style="flex:0 0 auto">
+        <div class="panel-header">
+          <div class="panel-title">INFRASTRUCTURE STATUS · ERCOT / DOWNDETECTOR</div>
+        </div>
+        <div class="panel-body" style="max-height:180px">
+          <div class="sec-div">POWER GRID · ERCOT</div>
+<!--           <div id="ercot-meters">
+            <div class="meter">
+              <div class="meter-label"><span>GRID FREQUENCY</span><span id="freq-val" style="color:var(--accent)">Loading...</span></div>
+              <div class="meter-bar"><div class="meter-fill" id="freq-bar" style="width:50%"></div></div>
+            </div>
+            <div class="meter">
+              <div class="meter-label"><span>LOAD vs CAPACITY</span><span id="load-val" style="color:var(--accent4)">--</span></div>
+              <div class="meter-bar"><div class="meter-fill warn" id="load-bar" style="width:60%"></div></div>
+            </div>
+          </div> -->
+          <div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">
+            <a href="https://www.ercot.com/gridmktinfo/dashboards" target="_blank" class="ctrl-btn" style="font-size:8px">ERCOT GRID →</a>
+            <a href="https://poweroutage.us/area/state/texas" target="_blank" class="ctrl-btn" style="font-size:8px">OUTAGE MAP →</a>
+            <a href="https://downdetector.com" target="_blank" class="ctrl-btn" style="font-size:8px">DOWNDETECTOR →</a>
+          </div>
+<!--           <div class="sec-div">SERVICES STATUS</div>
+          <div id="service-status-list"></div> -->
+        </div>
+      </div>
+
+      <!-- IMPORTANT MARKETS PANEL -->
+      <div class="panel" style="flex:1 1 auto">
+        <div class="panel-header">
+          <div class="panel-title">KEY MARKET INDICATORS</div>
+        </div>
+        <div class="panel-body chart-scroll">
+          <div class="chart-card">
+            <h3>Oil (WTI)</h3>
+            <iframe src="https://s.tradingview.com/widgetembed/?symbol=TVC:USOIL&interval=D&theme=dark"></iframe>
+          </div>
+
+          <div class="chart-card">
+            <h3>Tesla</h3>
+            <iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:TSLA&interval=D&theme=dark"></iframe>
+          </div>
+
+          <div class="chart-card">
+            <h3>Gold</h3>
+            <iframe src="https://s.tradingview.com/widgetembed/?symbol=TVC:GOLD&interval=D&theme=dark"></iframe>
+          </div>
+
+          <div class="chart-card">
+            <h3>Bitcoin</h3>
+            <iframe src="https://s.tradingview.com/widgetembed/?symbol=BINANCE:BTCUSDT&interval=D&theme=dark"></iframe>
+          </div>
+
+          <div class="chart-card">
+            <h3>Apple</h3>
+            <iframe src="https://s.tradingview.com/widgetembed/?symbol=NASDAQ:AAPL&interval=D&theme=dark"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE TRAFFIC CAM -->
+      <div class="panel" style="flex:0 0 auto">
+        <div class="panel-header">
+          <div class="panel-title">TRAFFIC CAM · AUSTIN TX</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn" onclick="nextCam(-1)">◄</button>
+            <span id="cam-label" style="font-family:var(--font-display);font-size:9px;color:var(--text-dim);padding:0 6px">IH-35 @ 51st</span>
+            <button class="ctrl-btn" onclick="nextCam(1)">►</button>
+          </div>
+        </div>
+        <div style="height:200px;background:var(--bg-panel3);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px">
+          <div style="font-family:var(--font-display);font-size:10px;color:var(--text-dim);letter-spacing:2px">TXDOT TRAFFIC CAMERAS</div>
+          <a href="https://data.mobility.austin.gov/traffic-cameras" target="_blank" class="ctrl-btn">OPEN AUSTIN PORTAL</a>
+          <a href="https://its.txdot.gov/its/District/AUS/cameras" target="_blank" class="ctrl-btn">TXDOT CAMERAS →</a>
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);text-align:center;padding:0 20px">
+            Live cam iframes are blocked by TxDOT CORS.<br>Click above to open in new tab.
+          </div>
+        </div>
+      </div>
+
+      <!-- RADIO PANEL -->
+      <div class="panel radio-panel">
+        <div class="panel-header">
+          <div class="panel-title">POLICE AND FIRE RADIO</div>
+          <div class="panel-ctrl">
+            <span class="badge live">LIVE</span>
+          </div>
+        </div>
+        <div class="panel-body radio-body">
+          <iframe 
+            src="https://www.broadcastify.com/calls/playlists/?uuid=327a0267-c366-11ee-a225-0e676e2c8629"
+            loading="lazy">
+          </iframe>
+          <iframe 
+            src="https://www.broadcastify.com/calls/playlists/?uuid=ecbfd29b-59dd-11f0-9e04-0e98d5b32039"
+            loading="lazy">
+          </iframe>
+        </div>
+      </div>
+
+      <!-- STOCK MARKET -->
+      <div class="panel" style="flex:0 0 auto">
+        <div class="panel-header">
+          <div class="panel-title">MARKET INTELLIGENCE</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn" onclick="refreshStocks()">↺ REFRESH</button>
+            <a href="https://finance.yahoo.com" target="_blank" class="ctrl-btn">→ YF</a>
+          </div>
+        </div>
+        <div class="panel-body" style="max-height:180px">
+          <div id="stocks-panel">
+            <div id="stocks-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:4px"></div>
+          </div>
+          <div class="sec-div">MARKET FEEDS</div>
+          <a href="https://finance.yahoo.com/markets/" target="_blank" class="qlink">
+            <span class="qlink-icon">📈</span>
+            <span><div class="qlink-label">Yahoo Finance Markets</div><div class="qlink-sub">Real-time quotes</div></span>
+          </a>
+          <a href="https://www.tradingview.com/markets/cryptocurrencies/global-charts/" target="_blank" class="qlink">
+            <span class="qlink-icon">₿</span>
+            <span><div class="qlink-label">TradingView Crypto</div><div class="qlink-sub">tradingview.com</div></span>
+          </a>
+          <a href="https://markets.businessinsider.com/index/s&p_500" target="_blank" class="qlink">
+            <span class="qlink-icon">📊</span>
+            <span><div class="qlink-label">S&amp;P 500 Live</div><div class="qlink-sub">businessinsider.com</div></span>
+          </a>
+        </div>
+      </div>
+
+      <!-- RSS AGGREGATOR -->
+      <div class="panel" style="flex:1 1 auto">
+        <div class="panel-header">
+          <div class="panel-title">RSS INTELLIGENCE FEED</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn active" onclick="filterFeed('all',this)">ALL</button>
+            <button class="ctrl-btn" onclick="filterFeed('geo',this)">GEO</button>
+            <button class="ctrl-btn" onclick="filterFeed('health',this)">HEALTH</button>
+            <button class="ctrl-btn" onclick="filterFeed('infra',this)">INFRA</button>
+          </div>
+        </div>
+        <div class="panel-body" id="rss-feed" style="max-height:300px">
+          <div class="shimmer"></div><div class="shimmer" style="width:90%"></div><div class="shimmer" style="width:80%"></div>
+          <div class="shimmer" style="width:70%"></div><div class="shimmer" style="width:85%"></div>
+        </div>
+      </div>
+
+    </div><!-- /col-center -->
+
+    <!-- RIGHT COLUMN -->
+    <div id="col-right">
+
+      <!-- Weather Panel -->
+      <div class="panel" style="min-height:200px">
+        <div class="panel-header">
+          <div class="panel-title">WEATHER · AUSTIN TX</div>
+          <div class="panel-ctrl">
+            <button class="ctrl-btn" onclick="loadWeather()">↺</button>
+            <a href="https://forecast.weather.gov/MapClick.php?CityName=Austin&state=TX&site=EWX&textField1=30.2672&textField2=-97.7431" target="_blank" class="ctrl-btn">NWS</a>
+          </div>
+        </div>
+        <div class="panel-body" id="weather-panel">
+          <div class="shimmer"></div><div class="shimmer" style="width:60%"></div>
+        </div>
+      </div>
+
+      <!-- Twitter/X OSINT Embed -->
+      <div class="panel-body" id="osint-feed" style="max-height:800px;overflow-y:auto">
+        <div class="shimmer"></div>
+        <div class="shimmer" style="width:80%"></div>
+      </div>
+
+      <!-- Global Events / GDELT -->
+      <div class="panel" style="min-height:160px">
+        <div class="panel-header">
+          <div class="panel-title">GDELT GLOBAL EVENTS</div>
+          <div class="panel-ctrl">
+            <a href="https://gdeltproject.org/data.html" target="_blank" class="ctrl-btn">→ GDELT</a>
+          </div>
+        </div>
+        <div class="panel-body">
+<!--           <a href="https://api.gdeltproject.org/api/v2/doc/doc?query=emergency&mode=ArtList&maxrecords=10&format=html" target="_blank" class="qlink">
+            <span class="qlink-icon">🌐</span>
+            <span><div class="qlink-label">GDELT Emergency Feed</div><div class="qlink-sub">Real-time world events API</div></span>
+          </a>
+          <a href="https://acleddata.com/dashboard/" target="_blank" class="qlink">
+            <span class="qlink-icon">⚔</span>
+            <span><div class="qlink-label">ACLED Conflict Dashboard</div><div class="qlink-sub">Armed conflict database</div></span>
+          </a> -->
+          <a href="https://reliefweb.int/disasters" target="_blank" class="qlink">
+            <span class="qlink-icon">🚨</span>
+            <span><div class="qlink-label">ReliefWeb Disasters</div><div class="qlink-sub">UN OCHA · global disasters</div></span>
+          </a>
+          <a href="https://www.who.int/emergencies/disease-outbreak-news" target="_blank" class="qlink">
+            <span class="qlink-icon">🦠</span>
+            <span><div class="qlink-label">WHO Disease Outbreaks</div><div class="qlink-sub">Live outbreak news</div></span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Google Alerts (Predefined) -->
+      <div class="panel" style="min-height:140px">
+        <div class="panel-header">
+          <div class="panel-title">GOOGLE ALERTS · RSS</div>
+          <div class="panel-ctrl">
+            <a href="https://www.google.com/alerts" target="_blank" class="ctrl-btn">SETUP →</a>
+          </div>
+        </div>
+        <div class="panel-body" id="galert-feeds">
+          <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim);line-height:1.7;border:1px dashed var(--border);padding:6px;margin-bottom:6px">
+            Preconfigured Google Alert RSS feeds are displayed below. These are read-only.
+          </div>
+        </div>
+      </div>
+
+      <!-- QUICK LINKS MODULE -->
+      <div class="panel" style="flex:1 1 auto">
+        <div class="panel-header">
+          <div class="panel-title">OSINT QUICK LINKS</div>
+        </div>
+        <div class="panel-body">
+          <a href="https://www.marinetraffic.com/" target="_blank" class="qlink">
+            <span class="qlink-icon">🚢</span>
+            <span><div class="qlink-label">MarineTraffic</div><div class="qlink-sub">Live AIS ship tracking</div></span>
+          </a>
+          <a href="https://www.flightradar24.com/" target="_blank" class="qlink">
+            <span class="qlink-icon">✈</span>
+            <span><div class="qlink-label">FlightRadar24</div><div class="qlink-sub">Global flight tracker</div></span>
+          </a>
+          <a href="https://www.adsbexchange.com/map/" target="_blank" class="qlink">
+            <span class="qlink-icon">📡</span>
+            <span><div class="qlink-label">ADS-B Exchange</div><div class="qlink-sub">Unfiltered military/gov aircraft</div></span>
+          </a>
+          <a href="https://zoom.earth/" target="_blank" class="qlink">
+            <span class="qlink-icon">🛰</span>
+            <span><div class="qlink-label">Zoom.Earth Satellite</div><div class="qlink-sub">Near-real-time satellite imagery</div></span>
+          </a>
+          <a href="https://www.lightningmaps.org/" target="_blank" class="qlink">
+            <span class="qlink-icon">⚡</span>
+            <span><div class="qlink-label">LightningMaps.org</div><div class="qlink-sub">Global real-time lightning</div></span>
+          </a>
+          <a href="https://earthquaketrack.com/us-tx-austin/recent" target="_blank" class="qlink">
+            <span class="qlink-icon">🌎</span>
+            <span><div class="qlink-label">EarthquakeTrack · Austin</div><div class="qlink-sub">Local seismic activity</div></span>
+          </a>
+          <a href="https://www.purpleair.com/map?opt=1/mAQI/a10/cC0#10/30.2672/-97.7431" target="_blank" class="qlink">
+            <span class="qlink-icon">💨</span>
+            <span><div class="qlink-label">PurpleAir · Austin AQI</div><div class="qlink-sub">Crowd-sourced air quality</div></span>
+          </a>
+          <a href="https://www.wunderground.com/wundermap" target="_blank" class="qlink">
+            <span class="qlink-icon">🌩</span>
+            <span><div class="qlink-label">Weather Underground</div><div class="qlink-sub">PWS station network map</div></span>
+          </a>
+          <a href="https://radar.weather.gov/station/KEWX/standard" target="_blank" class="qlink">
+            <span class="qlink-icon">🌀</span>
+            <span><div class="qlink-label">NWS Radar · KEWX Austin</div><div class="qlink-sub">Local doppler radar</div></span>
+          </a>
+          <a href="https://www.crimemapping.com/map/tx/austin" target="_blank" class="qlink">
+            <span class="qlink-icon">🚔</span>
+            <span><div class="qlink-label">Crime Mapping · Austin</div><div class="qlink-sub">Local incident map</div></span>
+          </a>
+        </div>
+      </div>
+
+    </div><!-- /col-right -->
+
+  </div><!-- /main-grid -->
+
+  <!-- BOTTOM BAR -->
+  <div id="bottom-bar">
+    <div class="bb-item"><span class="bb-label">LOC:</span><span class="bb-val">AUSTIN TX 30.27N 97.74W</span></div>
+    <div class="bb-item"><span class="bb-label">FEEDS:</span><span class="bb-val" id="feed-count">0</span></div>
+    <div class="bb-item"><span class="bb-label">ALERTS:</span><span class="bb-val" id="bb-alerts">0</span></div>
+    <div class="bb-item"><span class="bb-label">UPTIME:</span><span class="bb-val" id="bb-uptime">00:00:00</span></div>
+    <div class="bb-item"><span class="bb-label">LAST UPDATE:</span><span class="bb-val" id="last-update">--:--:--</span></div>
+    <div style="flex:1"></div>
+    <div class="bb-item" style="color:var(--accent2)">SENTINEL OSINT DASHBOARD · FRONTEND EDITION · Cameron Dietz</div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ADD MODULE BUTTON -->
+<button id="add-module" onclick="showAddModule()">+ ADD MODULE</button>
+
+<!-- MODAL -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal-box">
+    <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('open')">✕</button>
+    <div class="modal-title" id="modal-title">MODULE LIBRARY</div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ─── TIMEZONE ENGINE ─────────────────────────────────────────────────────────
+const TZ_ZONES = [
+  { id:'hst',  tz:'Pacific/Honolulu',    label:'HST · HONOLULU' },
+  { id:'akst', tz:'America/Anchorage',   label:'AKST · ANCHORAGE' },
+  { id:'pst',  tz:'America/Los_Angeles', label:'PST · LOS ANGELES' },
+  { id:'mst',  tz:'America/Denver',      label:'MST · DENVER' },
+  { id:'cst',  tz:'America/Chicago',     label:'CST · AUSTIN TX' },
+  { id:'est',  tz:'America/New_York',    label:'EST · NEW YORK' },
+  { id:'gmt',  tz:'UTC',                 label:'UTC · LONDON' },
+  { id:'cet',  tz:'Europe/Berlin',       label:'CET · BERLIN' },
+  { id:'ist',  tz:'Asia/Kolkata',        label:'IST · NEW DELHI' },
+  { id:'cst8', tz:'Asia/Shanghai',       label:'CST+8 · BEIJING' },
+  { id:'jst',  tz:'Asia/Tokyo',          label:'JST · TOKYO' },
+];
+
+function updateClocks() {
+  const now = new Date();
+  TZ_ZONES.forEach(z => {
+    const opts = { timeZone: z.tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false };
+    const dopts = { timeZone: z.tz, month:'short', day:'2-digit' };
+    const t = document.getElementById('t-'+z.id);
+    const d = document.getElementById('d-'+z.id);
+    if(t) t.textContent = now.toLocaleTimeString('en-US', opts);
+    if(d) d.textContent = now.toLocaleDateString('en-US', dopts).toUpperCase();
+  });
+  const lastEl = document.getElementById('last-update');
+  if(lastEl) lastEl.textContent = now.toLocaleTimeString('en-US',{hour12:false});
+}
+setInterval(updateClocks, 1000);
+updateClocks();
+
+// ─── UPTIME ───────────────────────────────────────────────────────────────────
+const startTime = Date.now();
+function updateUptime() {
+  const s = Math.floor((Date.now()-startTime)/1000);
+  const h = String(Math.floor(s/3600)).padStart(2,'0');
+  const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const sc = String(s%60).padStart(2,'0');
+  const ut = `${h}:${m}:${sc}`;
+  document.getElementById('uptime-counter').textContent = ut;
+  document.getElementById('bb-uptime').textContent = ut;
+}
+setInterval(updateUptime, 1000);
+
+// ─── TZ MAP TOGGLE ────────────────────────────────────────────────────────────
+function toggleTzMap() {
+  const p = document.getElementById('tz-map-panel');
+  const b = document.getElementById('tz-map-toggle');
+  const isOpen = p.classList.toggle('open');
+  b.textContent = isOpen ? 'MAP ▲' : 'MAP ▼';
+}
+
+// ─── CORS PROXY ───────────────────────────────────────────────────────────────
+function corsProxy(url) {
+  return `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+}
+
+// ─── USGS EARTHQUAKES ─────────────────────────────────────────────────────────
+let eqTimeMode = 'day';
+function setEqTime(mode, btn) {
+  eqTimeMode = mode;
+  document.querySelectorAll('#usgs-feed').forEach(()=>{});
+  document.getElementById('eq-day-btn').classList.toggle('active', mode==='day');
+  document.getElementById('eq-week-btn').classList.toggle('active', mode==='week');
+  loadUSGS();
+}
+
+function loadUSGS() {
+  const el = document.getElementById('usgs-feed');
+  el.innerHTML = '<div class="shimmer"></div><div class="shimmer" style="width:80%"></div>';
+  const url = `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_${eqTimeMode}.geojson`;
+  fetch(url)
+    .then(r=>r.json())
+    .then(d=>{
+      const quakes = d.features
+        .filter(f=>f.properties.mag>=2.0)
+        .sort((a,b)=>b.properties.mag-a.properties.mag)
+        .slice(0,12);
+      if(!quakes.length){el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">No significant seismic activity.</div>';return;}
+      el.innerHTML = quakes.map(q=>{
+        const p = q.properties;
+        const mag = p.mag?.toFixed(1)||'?';
+        const cls = mag>=6?'critical':mag>=4?'warning':'info';
+        const badgeCls = mag>=6?'crit':mag>=4?'warn':'info';
+        const place = p.place||'Unknown Location';
+        const t = new Date(p.time).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'});
+        return `<div class="feed-item ${cls}">
+          <div class="feed-title"><span class="badge ${badgeCls}">M${mag}</span> ${place}</div>
+          <div class="feed-meta"><span class="feed-src">USGS</span><span>${t}</span><span>Depth: ${(q.geometry.coordinates[2]||0).toFixed(0)}km</span></div>
+        </div>`;
+      }).join('');
+      updateAlertCount();
+    })
+    .catch(()=>{el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">USGS feed unavailable.</div>';});
+}
+
+// ─── NWS WEATHER ALERTS ───────────────────────────────────────────────────────
+let wxScope = 'local';
+function setWxScope(scope, btn){
+  wxScope = scope;
+  document.getElementById('wx-local-btn').classList.toggle('active', scope==='local');
+  document.getElementById('wx-nat-btn').classList.toggle('active', scope==='national');
+  loadNWSAlerts();
+}
+
+function loadNWSAlerts() {
+  const el = document.getElementById('nws-alerts');
+  el.innerHTML = '<div class="shimmer"></div>';
+  const url = wxScope==='local'
+    ? 'https://api.weather.gov/alerts/active?point=30.2672,-97.7431&status=actual'
+    : 'https://api.weather.gov/alerts/active?status=actual&severity=Extreme,Severe';
+  fetch(url)
+    .then(r=>r.json())
+    .then(d=>{
+      const alerts = d.features||[];
+      if(!alerts.length){
+        el.innerHTML='<div class="feed-item info"><div class="feed-title">No active weather alerts</div><div class="feed-meta"><span class="feed-src">NWS</span></div></div>';
+        return;
+      }
+      el.innerHTML = alerts.slice(0,10).map(a=>{
+        const p = a.properties;
+        const sev = p.severity;
+        const cls = sev==='Extreme'?'critical':sev==='Severe'?'warning':'info';
+        const bc = sev==='Extreme'?'crit':sev==='Severe'?'warn':'info';
+        return `<div class="feed-item ${cls}">
+          <div class="feed-title"><span class="badge ${bc}">${p.event||'ALERT'}</span> ${p.areaDesc||''}</div>
+          <div class="feed-meta"><span class="feed-src">NWS</span><span>${sev}</span><span>${p.headline?.slice(0,60)||''}</span></div>
+        </div>`;
+      }).join('');
+      updateAlertCount();
+    })
+    .catch(()=>{el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">NWS alerts unavailable.</div>';});
+}
+
+// ─── WEATHER ──────────────────────────────────────────────────────────────────
+function loadWeather() {
+  const el = document.getElementById('weather-panel');
+  el.innerHTML='<div class="shimmer"></div>';
+  fetch('https://api.weather.gov/points/30.2672,-97.7431')
+    .then(r=>r.json())
+    .then(d=>fetch(d.properties.observationStations))
+    .then(r=>r.json())
+    .then(d=>fetch(d.observationStations[0]+'/observations/latest'))
+    .then(r=>r.json())
+    .then(obs=>{
+      const p = obs.properties;
+      const tempC = p.temperature?.value;
+      const tempF = tempC!=null ? Math.round(tempC*9/5+32) : '--';
+      const hum = Math.round(p.relativeHumidity?.value||0);
+      const wind = Math.round((p.windSpeed?.value||0)*0.621371);
+      const desc = p.textDescription||'—';
+      const baro = p.barometricPressure?.value ? (p.barometricPressure.value/100).toFixed(1) : '--';
+      el.innerHTML = `
+        <div class="wx-big">${tempF}°F</div>
+        <div class="wx-desc">${desc}</div>
+        <div class="wx-row"><span class="wx-label">HUMIDITY</span><span class="wx-val">${hum}%</span></div>
+        <div class="wx-row"><span class="wx-label">WIND</span><span class="wx-val">${wind} mph</span></div>
+        <div class="wx-row"><span class="wx-label">PRESSURE</span><span class="wx-val">${baro} hPa</span></div>
+        <div class="wx-row"><span class="wx-label">STATION</span><span class="wx-val" style="font-size:9px;color:var(--text-dim)">ABIA / Austin TX</span></div>
+        <div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">
+          <a href="https://radar.weather.gov/station/KEWX/standard" target="_blank" class="ctrl-btn" style="font-size:8px">RADAR →</a>
+          <a href="https://forecast.weather.gov/MapClick.php?CityName=Austin&state=TX" target="_blank" class="ctrl-btn" style="font-size:8px">7-DAY →</a>
+        </div>`;
+    })
+    .catch(()=>{
+      el.innerHTML=`<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Weather data unavailable.
+        <br><a href="https://forecast.weather.gov/MapClick.php?CityName=Austin&state=TX" target="_blank" style="color:var(--accent)">→ NWS Austin TX</a></div>`;
+    });
+}
+
+// ─── STOCKS ───────────────────────────────────────────────────────────────────
+const STOCKS = [
+  { sym:'SPY', name:'S&P 500' },
+  { sym:'QQQ', name:'NASDAQ' },
+  { sym:'DJI', name:'DOW' },
+  { sym:'VIX', name:'VIX' },
+  { sym:'BTC', name:'Bitcoin' },
+  { sym:'GLD', name:'Gold' },
+  { sym:'USO', name:'Oil' },
+  { sym:'DXY', name:'USD Index' },
+];
+function refreshStocks() {
+  const grid = document.getElementById('stocks-grid');
+  // Static demo since Yahoo Finance API requires auth - deep link instead
+  grid.innerHTML = STOCKS.map(s=>`
+    <a href="https://finance.yahoo.com/quote/${s.sym}" target="_blank" style="text-decoration:none">
+      <div style="background:var(--bg-panel3);padding:6px 8px;border:1px solid var(--border);cursor:pointer" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+        <div style="font-family:var(--font-display);font-size:9px;color:var(--accent);letter-spacing:1px">${s.sym}</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-bright)">${s.name}</div>
+        <div style="font-family:var(--font-display);font-size:7px;color:var(--text-dim);margin-top:2px">→ YAHOO FINANCE</div>
+      </div>
+    </a>`).join('');
+}
+refreshStocks();
+
+// ─── TRAFFIC MAP TOGGLE ───────────────────────────────────────────────────────
+const MAP_SRCS = {
+  air: 'https://globe.adsbexchange.com/',
+  ship: 'https://www.marinetraffic.com/en/ais/embed/zoom:2/centery:20/centerx:0/maptype:1/shownames:true/mmsi:0/shipid:0',
+  traffic: 'https://www.google.com/maps/embed?pb=!1m14!1m12!1m3!1d220000!2d-97.7431!3d30.2672!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!5e0!3m2!1sen!2sus!4v1&layer=t',
+  sat: 'https://zoom.earth/#view=30.27,-97.74,8z/map=satellite',
+};
+function setTrafficMap(mode, btn){
+  document.querySelectorAll('[id^="map-"]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('traffic-map').src = MAP_SRCS[mode];
+}
+
+
+
+// ─── SERVICE STATUS (simulated) ────────────────────────────────────────────────
+const SERVICES = [
+  { name:'AT&T', status:1 },
+  { name:'Comcast', status:0.8 },
+  { name:'Google', status:1 },
+  { name:'AWS', status:1 },
+  { name:'Azure', status:0.9 },
+  { name:'Cloudflare', status:1 },
+];
+function renderServiceStatus(){
+  const el = document.getElementById('service-status-list');
+  if(!el) return;
+  el.innerHTML = SERVICES.map(s=>{
+    const pct = Math.round(s.status*100);
+    const cls = pct===100?'':'pct<90?"crit":"warn"';
+    const col = pct===100?'var(--accent2)':pct<90?'var(--red-alert)':'var(--accent4)';
+    return `<div class="meter">
+      <div class="meter-label"><span>${s.name}</span><span style="color:${col}">${pct}%</span></div>
+      <div class="meter-bar"><div class="meter-fill" style="width:${pct}%;background:${col}"></div></div>
+    </div>`;
+  }).join('');
+}
+renderServiceStatus();
+
+// Simulate ERCOT data
+function updateERCOT(){
+  const freq = (60 + (Math.random()-0.5)*0.1).toFixed(3);
+  const load = Math.round(60 + Math.random()*25);
+  const fEl = document.getElementById('freq-val');
+  const lEl = document.getElementById('load-val');
+  const fBar = document.getElementById('freq-bar');
+  const lBar = document.getElementById('load-bar');
+  if(fEl){ fEl.textContent = freq + ' Hz'; }
+  if(lEl){ lEl.textContent = load + '%'; }
+  if(fBar){ fBar.style.width = Math.abs(parseFloat(freq)-60)*1000+'%'; }
+  if(lBar){ lBar.style.width = load+'%'; lBar.className='meter-fill '+(load>85?'crit':load>70?'warn':''); }
+}
+updateERCOT();
+setInterval(updateERCOT, 10000);
+
+// ─── IPAWS INFO ───────────────────────────────────────────────────────────────
+async function loadIPAWS() {
+  const el = document.getElementById('ipaws-feed');
+
+  el.innerHTML = `<div class="shimmer"></div>`;
+
+  try {
+    const res = await fetch("https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/feed");
+    const text = await res.text();
+
+    const xml = new DOMParser().parseFromString(text, "text/xml");
+    const entries = [...xml.querySelectorAll("entry")];
+
+    if (!entries.length) {
+      el.innerHTML = "No active alerts.";
+      return;
+    }
+
+    el.innerHTML = entries.slice(0, 6).map(e => {
+      const code = e.querySelector("title")?.textContent;
+      const updated = e.querySelector("updated")?.textContent;
+      const link = e.querySelector("link")?.getAttribute("href");
+
+      return `
+        <div class="feed-item">
+          <div class="feed-title">${code}</div>
+          <div class="feed-meta">
+            <span>EAS Alert</span>
+            <span>${new Date(updated).toLocaleTimeString()}</span>
+          </div>
+          <a href="${link}" target="_blank" style="font-size:10px;color:var(--accent)">
+            View Details →
+          </a>
+        </div>
+      `;
+    }).join("") + footerLinks();
+
+  } catch (err) {
+    // fallback if CORS blocks it
+    el.innerHTML = `
+      <div class="feed-item info">
+        Live feed blocked by browser (CORS)
+      </div>
+      ${footerLinks()}
+    `;
+  }
+}
+
+function footerLinks() {
+  return `
+    <a href="https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/feed"
+       target="_blank" class="qlink" style="margin-top:6px">
+      <span class="qlink-icon">📡</span>
+      <span>
+        <div class="qlink-label">Raw IPAWS Feed</div>
+        <div class="qlink-sub">Open XML source</div>
+      </span>
+    </a>
+
+    <a href="https://www.fema.gov/emergency-managers/practitioners/integrated-public-alert-warning-system"
+       target="_blank" class="qlink" style="margin-top:4px">
+      <span class="qlink-icon">🚨</span>
+      <span>
+        <div class="qlink-label">FEMA IPAWS Portal</div>
+        <div class="qlink-sub">Official alert system</div>
+      </span>
+    </a>
+
+    <a href="https://www.civicplus.help/mass-notification/docs/ipaws-symbols-and-event-codes"
+       target="_blank" class="qlink" style="margin-top:4px">
+      <span class="qlink-icon">📖</span>
+      <span>
+        <div class="qlink-label">EAS Code Reference</div>
+        <div class="qlink-sub">Decode alert types</div>
+      </span>
+    </a>
+  `;
+}
+
+loadIPAWS();
+
+// ─── RADIO STATIONS ───────────────────────────────────────────────────────────
+const RADIO = [
+  /* { name:'NOAA Weather Radio Austin', freq:'162.400 MHz', stream:'https://www.weatherusa.net/radio', note:'External link' },
+  { name:'Austin NPR KMFA', freq:'89.5 FM', stream:'https://playerservices.streamtheworld.com/api/livestream-redirect/KMFAFM.mp3' },
+  { name:'KUT Austin Public Radio', freq:'90.5 FM', stream:'https://playerservices.streamtheworld.com/api/livestream-redirect/KUTFM.mp3' }, */
+  { name:'KLBJ News Talk', freq:'590 AM', stream:'https://playerservices.streamtheworld.com/api/livestream-redirect/KLBJAM.mp3' },
+];
+let currentStation = null;
+function renderRadio(){
+  const el = document.getElementById('radio-stations');
+  if(!el) return;
+  el.innerHTML = RADIO.map((s,i)=>`
+    <div class="radio-station" id="rs-${i}" onclick="playStation(${i})">
+      <div>
+        <div class="radio-name">${s.name}</div>
+        <div class="radio-freq">${s.freq}</div>
+      </div>
+      <div class="radio-play" id="rp-${i}"></div>
+    </div>`).join('');
+}
+renderRadio();
+
+function playStation(i){
+  const audio = document.getElementById('radio-player');
+  const s = RADIO[i];
+  if(currentStation===i){ audio.pause(); audio.src=''; currentStation=null; }
+  else {
+    currentStation=i;
+    audio.src=s.stream; audio.play().catch(()=>{});
+  }
+  document.querySelectorAll('.radio-station').forEach((el,j)=>el.classList.toggle('playing',j===currentStation));
+}
+function stopRadio(){
+  document.getElementById('radio-player').pause();
+  document.getElementById('radio-player').src='';
+  currentStation=null;
+  document.querySelectorAll('.radio-station').forEach(el=>el.classList.remove('playing'));
+}
+
+// ─── RSS FEED AGGREGATOR ──────────────────────────────────────────────────────
+const RSS_SOURCES = [
+  { url:'https://www.gdacs.org/xml/rss.xml', label:'GDACS', cat:'geo' },
+  /* { url:'https://www.who.int/feeds/entity/csr/don/en/rss.xml', label:'WHO', cat:'health' }, */
+  /* { url:'https://feeds.reuters.com/reuters/worldNews', label:'Reuters', cat:'geo' }, */
+  /* { url:'https://www.ready.gov/rss.xml', label:'Ready.gov', cat:'infra' }, */
+];
+let allFeedItems = [];
+let feedCat = 'all';
+
+function filterFeed(cat, btn){
+  feedCat = cat;
+  document.querySelectorAll('.panel-ctrl .ctrl-btn').forEach(b=>{
+    if(['all','geo','health','infra'].some(c=>b.getAttribute('onclick')?.includes(c)))
+      b.classList.remove('active');
+  });
+  btn?.classList.add('active');
+  renderFeedItems();
+}
+
+function renderFeedItems(){
+  const el = document.getElementById('rss-feed');
+  if(!el) return;
+  const items = feedCat==='all' ? allFeedItems : allFeedItems.filter(i=>i.cat===feedCat);
+  if(!items.length){ el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Loading feeds…</div>'; return; }
+  el.innerHTML = items.slice(0,30).map(i=>`
+    <div class="feed-item">
+      <div class="feed-title"><a href="${i.link||'#'}" target="_blank" style="color:inherit;text-decoration:none">${i.title}</a></div>
+      <div class="feed-meta"><span class="feed-src">${i.src}</span><span>${i.date}</span></div>
+    </div>`).join('');
+  document.getElementById('feed-count').textContent = allFeedItems.length;
+}
+
+function loadRSSFeeds(){
+  const el = document.getElementById('rss-feed');
+  if(el) el.innerHTML='<div class="shimmer"></div><div class="shimmer" style="width:80%"></div>';
+  allFeedItems = [];
+  let pending = RSS_SOURCES.length;
+  RSS_SOURCES.forEach(src=>{
+    fetch(corsProxy(src.url))
+      .then(r=>r.json())
+      .then(d=>{
+        const txt = d.contents;
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(txt,'text/xml');
+        const items = [...xml.querySelectorAll('item')].slice(0,8);
+        items.forEach(item=>{
+          allFeedItems.push({
+            title: item.querySelector('title')?.textContent||'',
+            link: item.querySelector('link')?.textContent||'',
+            date: new Date(item.querySelector('pubDate')?.textContent||Date.now()).toLocaleDateString(),
+            src: src.label,
+            cat: src.cat
+          });
+        });
+      })
+      .catch(()=>{})
+      .finally(()=>{ pending--; if(pending===0){ allFeedItems.sort((a,b)=>new Date(b.date)-new Date(a.date)); renderFeedItems(); } });
+  });
+}
+loadRSSFeeds();
+
+// ─── PREDEFINED GOOGLE ALERTS ─────────────────────────────
+const googleAlerts = [
+  "https://www.google.com/alerts/feeds/08452212971946324534/9399818114925540830",
+  "https://www.google.com/alerts/feeds/08452212971946324534/13608266183993083218",
+  "https://www.google.com/alerts/feeds/08452212971946324534/7226653902224441434"
+];
+
+function loadGoogleAlerts() {
+  const el = document.getElementById('galert-feeds');
+  googleAlerts.forEach(url => {
+    // fetch feed via CORS proxy
+    fetch(corsProxy(url))
+      .then(r => r.json())
+      .then(d => {
+        const txt = d.contents;
+        const xml = new DOMParser().parseFromString(txt, 'text/xml');
+        const items = [...xml.querySelectorAll('entry,item')].slice(0,5);
+        items.forEach(item => {
+          const title = item.querySelector('title')?.textContent || '';
+          const link = item.querySelector('link')?.getAttribute('href') || item.querySelector('link')?.textContent || '#';
+          const feedDiv = document.createElement('div');
+          feedDiv.className = 'feed-item';
+          feedDiv.style.marginBottom = '4px';
+          feedDiv.innerHTML = `
+            <div class="feed-title" style="font-size:10px">
+              <a href="${link}" target="_blank" style="color:var(--text-bright)">${title}</a>
+            </div>
+            <div class="feed-meta">
+              <span class="feed-src">Google Alert</span>
+            </div>
+          `;
+          el.appendChild(feedDiv);
+        });
+      })
+      .catch(err => {
+        console.warn("Failed to load feed:", url);
+      });
+  });
+}
+
+// load on page start
+loadGoogleAlerts();
+
+// ─── TWITTER ─────────────────────────────────────────────────────────────────
+async function loadOSINT() {
+  const el = document.getElementById("osint-feed");
+
+  try {
+    const res = await fetch("https://rss.app/feeds/D9DcA66qJUPf614j.xml");
+    const text = await res.text();
+
+    const xml = new DOMParser().parseFromString(text, "text/xml");
+    const items = [...xml.querySelectorAll("item")];
+
+    if (!items.length) {
+      el.innerHTML = "No feed items.";
+      return;
+    }
+
+    el.innerHTML = items.slice(0, 8).map(item => {
+      const title = item.querySelector("title")?.textContent;
+      const link = item.querySelector("link")?.textContent;
+      const pubDate = item.querySelector("pubDate")?.textContent;
+
+      return `
+        <div class="feed-item">
+          <div class="feed-title">
+            <a href="${link}" target="_blank" style="color:var(--text-bright);text-decoration:none">
+              ${title}
+            </a>
+          </div>
+          <div class="feed-meta">
+            <span>OSINT Feed</span>
+            <span>${new Date(pubDate).toLocaleTimeString()}</span>
+          </div>
+        </div>
+      `;
+    }).join("") + footer();
+    
+  } catch (err) {
+    el.innerHTML = `
+      <div class="feed-item error">
+        Failed to load OSINT feed
+      </div>
+      ${footer()}
+    `;
+  }
+}
+
+function footer() {
+  return `
+    <a href="https://rss.app/feeds/D9DcA66qJUPf614j.xml"
+       target="_blank" class="qlink" style="margin-top:6px">
+      <span class="qlink-icon">📰</span>
+      <span>
+        <div class="qlink-label">Open RSS Feed</div>
+        <div class="qlink-sub">View raw source</div>
+      </span>
+    </a>
+  `;
+}
+
+loadOSINT();
+
+// ─── ALERT COUNT ─────────────────────────────────────────────────────────────
+function updateAlertCount(){
+  const count = document.querySelectorAll('.feed-item.critical').length;
+  document.getElementById('alert-count').textContent = count;
+  document.getElementById('bb-alerts').textContent = count;
+  const dot = document.getElementById('alert-dot');
+  if(dot){ dot.className='dot '+(count>0?'alert':'warn'); }
+}
+
+// ─── ADD MODULE MODAL ─────────────────────────────────────────────────────────
+const MODULE_LIBRARY = [
+  { name:'Satellite Imagery', desc:'Zoom.earth or NASA Worldview embed', icon:'🛰', url:'https://zoom.earth' },
+  { name:'NOAA Hurricane Center', desc:'Atlantic/Pacific storm tracker', icon:'🌀', url:'https://www.nhc.noaa.gov/' },
+  { name:'ADS-B Exchange', desc:'Unfiltered military aircraft tracker', icon:'✈', url:'https://globe.adsbexchange.com/' },
+  { name:'FireWatch', desc:'FIRMS NASA active fire map', icon:'🔥', url:'https://firms.modaps.eosdis.nasa.gov/map/' },
+  { name:'GDELT News Heatmap', desc:'Global news event density', icon:'🌐', url:'https://gdeltproject.org' },
+  { name:'Radiation Map', desc:'RadiationMap.net global sensor grid', icon:'☢', url:'https://radmap.eu' },
+  { name:'Submarine Tracker', desc:'Live submarine cable map', icon:'🌊', url:'https://www.submarinecablemap.com/' },
+  { name:'ISS Live Tracker', desc:'Real-time ISS position', icon:'🚀', url:'https://spotthestation.nasa.gov/sightings/' },
+  { name:'TOR Exit Nodes', desc:'Dan.me.uk TOR node map', icon:'🔐', url:'https://www.dan.me.uk/torlist/' },
+  { name:'Shodan Monitor', desc:'Internet-exposed device search', icon:'🔍', url:'https://www.shodan.io' },
+];
+function showAddModule(){
+  document.getElementById('modal-title').textContent='MODULE LIBRARY // ADD NEW PANEL';
+  document.getElementById('modal-body').innerHTML = MODULE_LIBRARY.map(m=>`
+    <a href="${m.url}" target="_blank" class="qlink" style="margin-bottom:4px">
+      <span class="qlink-icon">${m.icon}</span>
+      <span>
+        <div class="qlink-label">${m.name}</div>
+        <div class="qlink-sub">${m.desc}</div>
+      </span>
+    </a>`).join('');
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal(e){ if(e.target.id==='modal-overlay') document.getElementById('modal-overlay').classList.remove('open'); }
+
+// ─── TICKER UPDATE ────────────────────────────────────────────────────────────
+function updateTicker(){
+  const items = [];
+  document.querySelectorAll('.feed-item.critical .feed-title').forEach(el=>items.push('⚠ '+el.textContent.trim()));
+  document.querySelectorAll('.feed-item.warning .feed-title').forEach(el=>items.push('◈ '+el.textContent.trim()));
+  if(items.length){
+    document.getElementById('ticker-text').textContent = items.join('   ·   ');
+  }
+}
+setTimeout(updateTicker, 8000);
+setInterval(updateTicker, 30000);
+
+// ─── AUTO-REFRESH ─────────────────────────────────────────────────────────────
+function refreshAll(){
+  loadUSGS();
+  loadNWSAlerts();
+  loadWeather();
+  loadRSSFeeds();
+  updateERCOT();
+}
+refreshAll();
+setInterval(refreshAll, 5*60*1000); // every 5 min
+
+</script>
+</body>
+</html>
