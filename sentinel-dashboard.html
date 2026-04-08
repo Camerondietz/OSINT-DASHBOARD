@@ -19,7 +19,7 @@
   --accent3: #ff4444;
   --accent4: #ffaa00;
   --text: #c8dde8;
-  --text-dim: #4a6a7a;
+  --text-dim: #85bfdc;
   --text-bright: #e8f8ff;
   --grid: rgba(0,200,255,0.04);
   --scan: rgba(0,200,255,0.03);
@@ -299,7 +299,7 @@ body::after {
 
 /* Radio panel body */
 .panel.radio-panel {
-    height: 250px;
+    height: 350px;
 }
 
 .radio-panel .radio-body {
@@ -312,9 +312,50 @@ body::after {
 /* Radio iframes taller and full width */
 .radio-panel .radio-body iframe {
   width: 100%;
-  height: 200px;          /* taller than IPAWS */
+  height: 300px;          /* taller than IPAWS */
   border: none;
   display: block;
+}
+
+/* horizontal scroll container */
+.rss-scroll {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+/* each feed column */
+.rss-column {
+  min-width:50%;
+  max-width: 300px;
+  background: #111;
+  border-radius: 8px;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+/* feed title */
+.rss-column h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 5px;
+}
+
+/* feed item */
+.rss-item {
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.rss-item a {
+  color: #ccc;
+  text-decoration: none;
+}
+
+.rss-item a:hover {
+  color: #fff;
 }
 
 /* ── LEFT COLUMN ── */
@@ -413,6 +454,32 @@ body::after {
 .chart-scroll::-webkit-scrollbar-thumb{
   background:#333;
   border-radius:4px;
+}
+
+/* Video feeds */
+.live-news-switcher {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.live-news-player {
+  width: 50%;
+}
+
+.panel-content {
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+@media (max-width: 1400px) {
+  .live-news-player {
+    height: 400px;
+    width: 100%;
+  }
 }
 
 /* ── WEATHER ── */
@@ -741,14 +808,30 @@ body::after {
           </div>
         </div>
         <div class="panel-body" id="nws-alerts">
-          <div class="shimmer"></div><div class="shimmer" style="width:75%"></div>
+          <div class="shimmer"></div><div class="shimmer" style="width:75%"></div>S
+          <a href="https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/feed"
+            target="_blank" class="qlink" style="margin-top:6px">
+            <span class="qlink-icon">📡</span>
+            <span>
+              <div class="qlink-label">Raw IPAWS Feed</div>
+              <div class="qlink-sub">Open XML source</div>
+            </span>
+          </a>
+          <a href="https://apps.fema.gov/IPAWSOPEN_EAS_SERVICE/rest/feed"
+            target="_blank" class="qlink" style="margin-top:6px">
+            <span class="qlink-icon">📡</span>
+            <span>
+              <div class="qlink-label">Raw IPAWS Feed</div>
+              <div class="qlink-sub">Open XML source</div>
+            </span>
+          </a>
         </div>
       </div>
-
       <!-- NTAS Status -->
        <div style="justify-content:center">
         <iframe src="https://www.dhs.gov/ntas/" name="National Terrorism Advisory System" title="National Terrorism Advisory System" width="250" height="180" scrolling="no" frameborder="0" seamless border="0"></iframe>
       </div>
+
       <!-- USGS Earthquakes -->
       <div class="panel" style="min-height:180px">
         <div class="panel-header">
@@ -844,6 +927,46 @@ body::after {
           </div>
         </div>
       </div>
+
+      <!-- Live news -->
+      <div class="panel panel-wide">
+        <div class="panel-header">
+          <div class="panel-title">Live News</div>
+        </div>
+
+        <div class="live-news-toolbar">
+          <div class="live-news-switcher" id="live-channel-buttons"></div>
+        </div>
+
+        <div class="panel-content">
+          <div class="live-news-player">
+            <video id="live-video"
+              autoplay
+              playsinline
+              controls
+              style="width:100%;height:100%;background:#000;">
+            </video>
+          </div>
+          <div class="live-news-player">
+            <iframe width="100%" height="100%" src="https://www.youtube.com/embed/-zGuR1qVKrU?si=Q4Ugxwvc16QuE1V4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+          </div>
+        </div>
+      </div>
+
+
+<!--       <div class="panel panel-wide">
+        <div class="panel-header">
+          <div class="panel-title">Video Feed</div>
+        </div>
+
+        <div class="live-news-toolbar">
+          <div class="live-news-switcher" id="yt-buttons"></div>
+        </div>
+
+        <div class="panel-content">
+
+        </div>
+      </div> -->
 
       <!-- DOWN DETECTOR + ERCOT -->
       <div class="panel" style="flex:0 0 auto">
@@ -971,6 +1094,17 @@ body::after {
             <span class="qlink-icon">📊</span>
             <span><div class="qlink-label">S&amp;P 500 Live</div><div class="qlink-sub">businessinsider.com</div></span>
           </a>
+        </div>
+      </div>
+
+      <!-- RSS MULTI-FEED PANEL -->
+      <div class="panel" style="flex:1 1 auto">
+        <div class="panel-header">
+          <div class="panel-title">LIVE RSS FEEDS</div>
+        </div>
+
+        <div class="panel-body rss-scroll" id="rss-columns">
+          <!-- Columns injected here rss-columns-->
         </div>
       </div>
 
@@ -1272,6 +1406,103 @@ function loadNWSAlerts() {
     .catch(()=>{el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">NWS alerts unavailable.</div>';});
 }
 
+// Video Feeds
+// script src="https://cdn.jsdelivr.net/npm/hls.js@latest"script>
+
+const LIVE_CHANNELS = {
+  cnn: {
+    name: "CNN",
+    url: "https://turnerlive.warnermediacdn.com/hls/live/586495/cnngo/cnn_slate/VIDEO_0_3564000.m3u8"
+  },
+  bloomberg: {
+    name: "Bloomberg",
+    url: "https://www.bloomberg.com/media-manifest/streams/us.m3u8"
+  },
+  euronews: {
+    name: "Euronews",
+    url: "https://rakuten-euronews-1-eu.rakuten.wurl.tv/playlist.m3u8"
+  },
+  dw: {
+    name: "DW",
+    url: "https://dwstream3-lh.akamaihd.net/i/dwstream3_live@124409/master.m3u8"
+  }
+};
+
+let hls;
+const video = document.getElementById('live-video');
+
+function loadStream(url) {
+  if (hls) hls.destroy();
+
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = url;
+  } else if (Hls.isSupported()) {
+    hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+  } else {
+    console.error("HLS not supported");
+  }
+}
+
+function initLiveNews() {
+  const container = document.getElementById('live-channel-buttons');
+
+  Object.entries(LIVE_CHANNELS).forEach(([id, ch], i) => {
+    const btn = document.createElement('button');
+    btn.className = 'qlink' + (i === 0 ? ' active' : '');
+    btn.textContent = ch.name;
+
+    btn.onclick = () => {
+      document.querySelectorAll('.qlink')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadStream(ch.url);
+    };
+
+    container.appendChild(btn);
+
+    if (i === 0) loadStream(ch.url);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initLiveNews);
+
+/* const YT_CHANNELS = {
+  markets: {
+    name: "Live Feed Iran War",
+    id: "zGuR1qVKrU"
+  },
+};
+
+function loadYouTube(videoId) {
+  const player = document.getElementById('yt-player');
+  player.src = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+}
+
+function initYouTube() {
+  const container = document.getElementById('yt-buttons');
+
+  Object.entries(YT_CHANNELS).forEach(([id, vid], i) => {
+    const btn = document.createElement('button');
+    btn.className = 'live-channel-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = vid.name;
+
+    btn.onclick = () => {
+      document.querySelectorAll('#yt-buttons .live-channel-btn')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadYouTube(vid.id);
+    };
+
+    container.appendChild(btn);
+
+    if (i === 0) loadYouTube(vid.id);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', initYouTube); */
+
 // ─── WEATHER ──────────────────────────────────────────────────────────────────
 function loadWeather() {
   const el = document.getElementById('weather-panel');
@@ -1510,36 +1741,48 @@ function stopRadio(){
 
 // ─── RSS FEED AGGREGATOR ──────────────────────────────────────────────────────
 const RSS_SOURCES = [
-  { url:'https://www.gdacs.org/xml/rss.xml', label:'GDACS', cat:'geo' },
-  /* { url:'https://www.who.int/feeds/entity/csr/don/en/rss.xml', label:'WHO', cat:'health' }, */
-  /* { url:'https://feeds.reuters.com/reuters/worldNews', label:'Reuters', cat:'geo' }, */
-  /* { url:'https://www.ready.gov/rss.xml', label:'Ready.gov', cat:'infra' }, */
+  { label: "CNN", url: "https://rss.cnn.com/rss/edition.rss" },
+  { label: "Reuters", url: "https://feeds.reuters.com/reuters/topNews" },
+  { label: "Bloomberg", url: "https://feeds.bloomberg.com/markets/news.rss" },
+  { label: "WSJ", url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml" }
 ];
-let allFeedItems = [];
-let feedCat = 'all';
 
-function filterFeed(cat, btn){
-  feedCat = cat;
-  document.querySelectorAll('.panel-ctrl .ctrl-btn').forEach(b=>{
-    if(['all','geo','health','infra'].some(c=>b.getAttribute('onclick')?.includes(c)))
-      b.classList.remove('active');
+function loadRSSColumns() {
+  const container = document.getElementById('rss-columns');
+  container.innerHTML = '';
+
+  RSS_SOURCES.forEach(src => {
+    // create column
+    const col = document.createElement('div');
+    col.className = 'rss-column';
+    col.innerHTML = `<h3>${src.label}</h3>
+                     <div class="shimmer"></div>
+                     <div class="shimmer" style="width:80%"></div>`;
+    container.appendChild(col);
+
+    fetch(corsProxy(src.url))
+      .then(r => r.json())
+      .then(d => {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(d.contents, 'text/xml');
+
+        const items = [...xml.querySelectorAll('item')].slice(0, 6);
+
+        col.innerHTML = `<h3>${src.label}</h3>` + items.map(item => `
+          <div class="rss-item">
+            <a href="${item.querySelector('link')?.textContent}" target="_blank">
+              ${item.querySelector('title')?.textContent}
+            </a>
+          </div>
+        `).join('');
+      })
+      .catch(() => {
+        col.innerHTML = `<h3>${src.label}</h3><div>Failed to load</div>`;
+      });
   });
-  btn?.classList.add('active');
-  renderFeedItems();
 }
 
-function renderFeedItems(){
-  const el = document.getElementById('rss-feed');
-  if(!el) return;
-  const items = feedCat==='all' ? allFeedItems : allFeedItems.filter(i=>i.cat===feedCat);
-  if(!items.length){ el.innerHTML='<div style="font-family:var(--font-mono);font-size:9px;color:var(--text-dim)">Loading feeds…</div>'; return; }
-  el.innerHTML = items.slice(0,30).map(i=>`
-    <div class="feed-item">
-      <div class="feed-title"><a href="${i.link||'#'}" target="_blank" style="color:inherit;text-decoration:none">${i.title}</a></div>
-      <div class="feed-meta"><span class="feed-src">${i.src}</span><span>${i.date}</span></div>
-    </div>`).join('');
-  document.getElementById('feed-count').textContent = allFeedItems.length;
-}
+loadRSSColumns();
 
 function loadRSSFeeds(){
   const el = document.getElementById('rss-feed');
